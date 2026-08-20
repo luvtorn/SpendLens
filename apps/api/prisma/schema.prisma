@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum ReceiptMatchStatus {
+  AUTO_MATCHED
+  PENDING_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  name            String?
+  passwordHash    String
+  refreshSessions RefreshSession[]
+  bankAccounts    BankAccount[]
+  statements      Statement[]
+  transactions    Transaction[]
+  receipts        Receipt[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model RefreshSession {
+  id        String    @id
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+}
+
+model BankAccount {
+  id           String        @id @default(cuid())
+  userId       String
+  name         String
+  bankName     String
+  currency     String        @db.Char(3)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statements   Statement[]
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([userId])
+}
+
+model Statement {
+  id            String         @id @default(cuid())
+  userId        String
+  bankAccountId String
+  fileName      String
+  fileKey       String         @unique
+  periodFrom    DateTime       @db.Date
+  periodTo      DateTime       @db.Date
+  status        DocumentStatus @default(UPLOADED)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccount   BankAccount    @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([userId, periodFrom])
+  @@index([bankAccountId, periodFrom])
+}
+
+model Transaction {
+  id              String         @id @default(cuid())
+  userId          String
+  statementId     String
+  bankAccountId   String
+  transactionDate DateTime       @db.Date
+  postingDate     DateTime?      @db.Date
+  merchantRaw     String
+  merchantId      String?
+  descriptionRaw  String?
+  amount          Decimal        @db.Decimal(19, 2)
+  currency        String         @db.Char(3)
+  categoryId      String?
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  statement       Statement      @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  bankAccount     BankAccount    @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+  merchant        Merchant?      @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  category        Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  receiptMatches  ReceiptMatch[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId, transactionDate])
+  @@index([statementId])
+  @@index([bankAccountId, transactionDate])
+  @@index([merchantId])
+  @@index([categoryId])
+}
+
+model Merchant {
+  id             String          @id @default(cuid())
+  name           String
+  normalizedName String          @unique
+  aliases        MerchantAlias[]
+  transactions   Transaction[]
+  receipts       Receipt[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model MerchantAlias {
+  id              String   @id @default(cuid())
+  merchantId      String
+  value           String
+  normalizedValue String   @unique
+  merchant        Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+}
+
+model Receipt {
+  id          String         @id @default(cuid())
+  userId      String
+  fileName    String
+  fileKey     String         @unique
+  merchantRaw String
+  merchantId  String?
+  receiptDate DateTime       @db.Date
+  total       Decimal        @db.Decimal(19, 2)
+  currency    String         @db.Char(3)
+  status      DocumentStatus @default(UPLOADED)
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchant    Merchant?      @relation(fields: [merchantId], references: [id], onDelete: SetNull)
+  items       ReceiptItem[]
+  matches     ReceiptMatch[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId, receiptDate])
+  @@index([merchantId])
+}
+
+model ReceiptItem {
+  id             String    @id @default(cuid())
+  receiptId      String
+  nameRaw        String
+  nameNormalized String?
+  quantity       Decimal?  @db.Decimal(12, 3)
+  unitPrice      Decimal?  @db.Decimal(19, 2)
+  totalPrice     Decimal   @db.Decimal(19, 2)
+  categoryId     String?
+  receipt        Receipt   @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+
+  @@index([receiptId])
+  @@index([categoryId])
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  parentId     String?
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Category[]    @relation("CategoryHierarchy")
+  transactions Transaction[]
+  receiptItems ReceiptItem[]
+
+  @@index([parentId])
+}
+
+model ReceiptMatch {
+  id            String             @id @default(cuid())
+  receiptId     String
+  transactionId String
+  score         Decimal            @db.Decimal(5, 4)
+  amountScore   Decimal            @db.Decimal(5, 4)
+  dateScore     Decimal            @db.Decimal(5, 4)
+  merchantScore Decimal            @db.Decimal(5, 4)
+  status        ReceiptMatchStatus
+  receipt       Receipt            @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  transaction   Transaction        @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([receiptId, transactionId])
+  @@index([receiptId, status])
+  @@index([transactionId, status])
+}
