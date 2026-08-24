@@ -1,5 +1,8 @@
 # SpendLens
 
+Полная документация для разработчиков и порядок onboarding находятся в
+[`docs/README.md`](docs/README.md).
+
 SpendLens is organized as two independently deployable Node.js applications:
 
 - `apps/web` — Next.js frontend on port `3000`.
