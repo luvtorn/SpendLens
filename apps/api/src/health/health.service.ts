@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { PrismaService } from "@/prisma/prisma.service";
 
 @Injectable()
@@ -12,10 +12,13 @@ export class HealthService {
   async getDatabaseHealth(): Promise<
     { status: string } | { statusCode: number }
   > {
-    if (await this.prisma.$queryRaw`SELECT 1`) {
+    try {
+      throw new Error("Simulated database failure");
+
+      await this.prisma.$queryRaw`SELECT 1`;
       return { status: "ok" };
-    } else {
-      return { statusCode: 503 };
+    } catch (err) {
+      throw new ServiceUnavailableException("Database is not available");
     }
   }
 }
