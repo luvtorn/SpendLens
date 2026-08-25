@@ -1,5 +1,8 @@
 # SpendLens
 
+Полная документация для разработчиков и порядок onboarding находятся в
+[`docs/README.md`](docs/README.md).
+
 SpendLens is organized as two independently deployable Node.js applications:
 
 - `apps/web` — Next.js frontend on port `3000`.
@@ -81,6 +84,17 @@ Run the applications in separate terminals:
 npm run dev:api
 npm run dev:web
 ```
+
+## Health checks
+
+The API exposes two public operational endpoints:
+
+- `GET /api/health` is a lightweight liveness check. It returns `200` with
+  `{ "status": "ok" }` when the NestJS process is running and does not query
+  PostgreSQL.
+- `GET /api/health/ready` is a readiness check. It performs a read-only
+  database probe, returns `200` with `{ "status": "ok" }` when PostgreSQL is
+  available, and returns a safe `503` response otherwise.
 
 Useful workspace-wide checks:
 
