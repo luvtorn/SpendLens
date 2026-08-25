@@ -7,15 +7,13 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
   @Public()
   @Get()
-  getHealth(): { status: string } {
+  getHealth(): { status: "ok" } {
     return this.healthService.getHealth();
   }
 
   @Public()
   @Get("ready")
-  async getDatabaseHealth(): Promise<
-    { status: string } | { statusCode: number }
-  > {
+  async getDatabaseHealth(): Promise<{ status: "ok" }> {
     return this.healthService.getDatabaseHealth();
   }
 }
